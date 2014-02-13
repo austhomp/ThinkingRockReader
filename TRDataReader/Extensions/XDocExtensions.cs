@@ -34,12 +34,33 @@ namespace TRDataReader.Extensions
             return attribute != null ? attribute.Value : node.Value;
         }
 
-        public static string GetRelativeValue(this XAttribute attribute)
+        public static string GetRelativeElementValue(this XElement node, string element)
         {
-            return attribute.Parent.GetRelativeValue(attribute.Value);
+            var e = node.Element(element);
+
+            if (e == null)
+            {
+                return "N/A";
+            }
+
+            var r = e.Attribute("reference");
+            if (r != null)
+            {
+                return r.GetRelativeValue();
+            }
+            else
+            {
+                return (string)e;
+            }
         }
 
-        public static string GetRelativeValue(this XElement node, string pathReference)
+        public static string GetRelativeValue(this XAttribute attribute)
+        {
+            var relativeValue = attribute.Parent.GetRelativeValue(attribute.Value);
+            return relativeValue;
+        }
+
+        public static string GetRelativeValue(this XElement node, string pathReference, string targetElementName = null)
         {
             var parts = pathReference.Split(new string[] { "/"}, StringSplitOptions.RemoveEmptyEntries);
             XElement current = node;
@@ -57,19 +78,44 @@ namespace TRDataReader.Extensions
                         var opening = part.IndexOf("[");
                         var target = part.Substring(0, opening);
                         var ending = part.IndexOf("]");
-                        var index = int.Parse(part.Substring(opening + 1, ending - opening-1));
+                        var index = int.Parse(part.Substring(opening + 1, ending - opening - 1));
 
-                        current = current.Descendants(target).Skip(index-1).First();
+                        // apparently we have to not count any items that are just references themselves. Not obvious nor was it easy to determine.
+                        current = current.Descendants(target)
+                            .Where(x => x.Elements().Where(y => !y.Value.Contains("reference")).Any())
+                            .Skip(index - 1)
+                            .First();
                     } 
                     else
                     {
-                        current = current.Element(part);    
+                        var prev = current;
+                        current = current.Element(part);
+                        if (current == null)
+                        {
+                            var maybeRef = prev.Attribute("reference");
+                            if (maybeRef != null)
+                            {
+                                return prev.GetRelativeValue(maybeRef.Value, part);
+                            }
+                        }
                     }
                     
                 }
             }
+
             if (current == null) return "<Unknown>";
-            return (string)current.Element("name") ?? current.Value as string;
+
+            if (targetElementName != null)
+            {
+                var d = current.Element(targetElementName);
+                if (d != null)
+                {
+                    current = d;
+                }
+            }
+
+            string val = (string) current.Element("name") ?? current.Value;
+            return val;
         }
 
         public static XElement GetRelativeNode(this XAttribute attribute)

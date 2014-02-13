@@ -17,6 +17,8 @@ namespace TRDataReader
         public string Context { get; set; }
 
         public XElement Node { get; set; }
+
+        public string Notes { get; set; }
          
     }
 }
